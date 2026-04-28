@@ -1,0 +1,35 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "apiguard"
+version = "0.1.0"
+description = "Async API security probing toolkit"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "httpx>=0.27.0",
+  "PyYAML>=6.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0.0",
+]
+
+[project.scripts]
+apiguard = "apiguard.cli:main"
+
+[tool.setuptools]
+packages = ["apiguard", "apiguard.core", "apiguard.checks", "apiguard.reports"]
+py-modules = [
+  "auth",
+  "business_logic",
+  "client",
+  "cors_headers",
+  "data_exposure",
+  "engine",
+  "injection",
+  "rate_limit",
+]

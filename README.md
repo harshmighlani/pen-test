@@ -1,112 +1,103 @@
 # apiguard
- 
-API penetration testing suite for development — built with Python + httpx.
- 
+
+API security/performance probing toolkit (Python + `httpx`, async checks).
+
 ## Install
- 
+
 ```bash
-cd apiguard
+python -m venv .venv
+source .venv/bin/activate
+pip install -e .
+```
+
+For development (includes tests):
+
+```bash
 pip install -e ".[dev]"
 ```
- 
+
 ## Quick start
- 
+
 ```bash
-# Copy and edit the example config
+# Copy and edit config
 cp config.example.yaml config.yaml
-# edit config.yaml — set target, token, endpoints
- 
-# Run a full scan
-apiguard scan config.yaml
- 
-# List available checks
+
+# See available checks
 apiguard list-checks
- 
-# Output JSON only (good for CI)
-apiguard scan config.yaml --format json --output ./reports/scan
- 
-# Fail CI pipeline if any HIGH/CRITICAL found (exit code 1)
+
+# Run scan (console + json by default from config)
+apiguard scan config.yaml
+
+# JSON only
+apiguard scan config.yaml --format json --output ./reports/apiguard-report
+
+# Fail CI on high/critical findings
 apiguard scan config.yaml --fail-on high
 ```
- 
+
+## How the project is designed to work
+
+1. Load YAML config (`target`, auth tokens, endpoints, enabled checks).
+2. Build an authenticated `APIClient`.
+3. Instantiate enabled checks from a global registry (`ALL_CHECKS`).
+4. Run checks concurrently with bounded concurrency.
+5. Collect findings (severity, evidence, remediation) into a final scan report.
+6. Exit with code policy in CLI/CI depending on severity threshold.
+
 ## Project structure
- 
-```
+
+```text
 apiguard/
-├── cli.py                    # Typer entry point
-├── config.example.yaml       # Annotated config template
-├── core/
-│   ├── client.py             # httpx async client wrapper
-│   ├── config.py             # YAML config loader + defaults
-│   ├── engine.py             # Orchestrates checks concurrently
-│   └── models.py             # Finding, Severity, ScanResult
-├── checks/
-│   ├── base.py               # BaseCheck (all checks inherit this)
-│   ├── auth.py               # JWT alg=none, BOLA/IDOR, missing auth
-│   ├── injection.py          # SQLi, command injection
-│   ├── rate_limit.py         # Flood detection
-│   ├── data_exposure.py      # Verbose errors, sensitive fields
-│   ├── cors_headers.py       # CORS misconfig, security headers
-│   └── business_logic.py     # Negative amounts, race conditions, mass assignment
-└── reports/
-    └── reporters.py          # Rich console + JSON output
+├── apiguard/
+│   ├── __init__.py
+│   ├── cli.py
+│   ├── checks/
+│   │   ├── __init__.py
+│   │   ├── base.py
+│   │   ├── auth.py
+│   │   ├── injection.py
+│   │   ├── rate_limit.py
+│   │   ├── data_exposure.py
+│   │   ├── cors_headers.py
+│   │   └── business_logic.py
+│   ├── core/
+│   │   ├── config.py
+│   │   ├── client.py
+│   │   ├── engine.py
+│   │   └── models.py
+│   └── reports/
+│       └── reporters.py
+├── config.example.yaml
+└── pyproject.toml
 ```
- 
-## Adding a new check
- 
-1. Create `apiguard/checks/my_check.py`:
-```python
-from apiguard.checks.base import BaseCheck
-from apiguard.core.models import Severity
- 
-class MyCheck(BaseCheck):
-    id   = "my_check"
-    name = "My Custom Check"
- 
-    async def run(self) -> None:
-        resp, _ = await self.client.get("/some-path")
-        if resp.status_code == 200 and "secret" in resp.text:
-            self.add_finding(
-                Severity.HIGH,
-                "Secret exposed",
-                "The /some-path endpoint leaks a secret.",
-                endpoint="/some-path",
-                remediation="Remove the secret from the response.",
-            )
-```
- 
-2. Register it in `apiguard/checks/__init__.py`:
-```python
-from apiguard.checks.my_check import MyCheck
-ALL_CHECKS["my_check"] = MyCheck
-```
- 
-3. Add an entry under `checks:` in your YAML config.
-## CI integration
- 
-```yaml
-# .github/workflows/security.yml
-- name: API security scan
-  run: |
-    pip install -e ./apiguard
-    apiguard scan config.yaml --fail-on high --format json --output security-report
-- uses: actions/upload-artifact@v4
-  with:
-    name: security-report
-    path: security-report.json
-```
- 
+
+## Minimal verification checklist
+
+- `apiguard list-checks` shows all check IDs.
+- `apiguard scan config.yaml` completes without import/runtime errors.
+- JSON report file is created.
+- `--fail-on high` returns non-zero when high/critical findings exist.
+
 ## Config reference
- 
-| Key | Default | Description |
-|-----|---------|-------------|
-| `target` | — | Base URL of your API |
-| `auth.token` | `""` | Bearer token for your test user |
-| `auth.other_user_token` | `""` | Second user token for BOLA checks |
-| `scan.timeout` | `10` | Request timeout (seconds) |
-| `scan.concurrency` | `5` | Max parallel checks |
-| `scan.verify_ssl` | `true` | Set false for self-signed certs |
-| `checks.<id>.enabled` | `true` | Toggle individual checks |
-| `report.formats` | `[console, json]` | Output formats |
-| `report.output` | `./apiguard-report` | Base path for file reports |
- 
+
+- `target`: base API URL
+- `auth.token`: bearer token for authenticated checks
+- `auth.other_user_token`: optional second-user token for BOLA checks
+- `endpoints[]`: endpoint objects (`path`, `method`, optional `params`/`body`, `auth_required`)
+- `scan.timeout`: request timeout (seconds)
+- `scan.concurrency`: max parallel check tasks
+- `scan.verify_ssl`: set `false` for local/self-signed environments
+- `checks.<id>.enabled`: enable/disable each check
+- `report.formats`: output formats (`console`, `json`)
+- `report.output`: base path for report files
+
+## Notes
+
+- Existing top-level `*.py` files are currently kept for compatibility while the package is being stabilized.
+- New work should target the packaged modules under `apiguard/`.
+
+## Run tests
+
+```bash
+pytest -q
+```
