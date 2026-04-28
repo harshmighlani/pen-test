@@ -1,0 +1,86 @@
+# apiguard scan configuration
+# Run with: apiguard scan config.yaml
+
+target: "http://localhost:8000"   # Base URL of your API (no trailing slash)
+
+# ── Authentication ─────────────────────────────────────────────────────────
+auth:
+  token: ""                        # JWT / bearer token for your test user
+  other_user_token: ""             # Optional: token for a *different* user (enables BOLA check)
+
+# ── Endpoints to test ──────────────────────────────────────────────────────
+# List the routes you want tested. The more detail you add, the deeper
+# the checks (injection needs params/body; BOLA needs ID-bearing paths).
+endpoints:
+  - path: /api/users
+    method: GET
+    auth_required: true
+
+  - path: /api/users/1
+    method: GET
+    auth_required: true
+
+  - path: /api/users/1
+    method: PUT
+    auth_required: true
+    body:
+      name: "Test User"
+      email: "test@example.com"
+
+  - path: /api/auth/login
+    method: POST
+    auth_required: false
+    body:
+      username: "test"
+      password: "test123"
+
+  - path: /api/products
+    method: GET
+    auth_required: false
+    params:
+      search: "widget"
+      category: "1"
+
+  - path: /api/orders
+    method: POST
+    auth_required: true
+    body:
+      product_id: 42
+      quantity: 1
+      amount: 9.99
+
+# ── Scan settings ──────────────────────────────────────────────────────────
+scan:
+  timeout:           10       # Request timeout in seconds
+  concurrency:        5       # Max parallel checks
+  follow_redirects: false
+  verify_ssl:        true     # Set false for local dev with self-signed certs
+
+# ── Check settings ─────────────────────────────────────────────────────────
+checks:
+  auth:
+    enabled: true
+
+  injection:
+    enabled: true
+
+  rate_limit:
+    enabled: true
+    requests: 20              # Number of concurrent requests to send
+    window_s:  5              # Time window for the flood
+
+  data_exposure:
+    enabled: true
+
+  cors:
+    enabled: true
+
+  business_logic:
+    enabled:     true
+    concurrency: 10           # Concurrent requests for race condition tests
+
+# ── Report settings ────────────────────────────────────────────────────────
+report:
+  formats:      [console, json]
+  output:       ./apiguard-report   # Saved as apiguard-report.json
+  min_severity: info
